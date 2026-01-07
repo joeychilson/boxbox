@@ -33,6 +33,27 @@ func (db *DB) CreateSandbox(ctx context.Context, daytonaID string) (*Sandbox, er
 	return &s, nil
 }
 
+// ImportSandbox imports an existing Daytona sandbox directly as available.
+func (db *DB) ImportSandbox(ctx context.Context, daytonaID string) (*Sandbox, error) {
+	var s Sandbox
+	err := db.pool.QueryRow(ctx, `
+		INSERT INTO sandbox_pool (daytona_id, state)
+		VALUES ($1, $2)
+		ON CONFLICT (daytona_id) DO NOTHING
+		RETURNING id, daytona_id, state, claimed_by, claimed_at, created_at, last_used_at, error_message, version
+	`, daytonaID, SandboxStateAvailable).Scan(
+		&s.ID, &s.DaytonaID, &s.State, &s.ClaimedBy, &s.ClaimedAt,
+		&s.CreatedAt, &s.LastUsedAt, &s.ErrorMessage, &s.Version,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("importing sandbox: %w", err)
+	}
+	return &s, nil
+}
+
 // UpdateSandboxState updates a sandbox's state.
 func (db *DB) UpdateSandboxState(ctx context.Context, id uuid.UUID, state SandboxState) error {
 	_, err := db.pool.Exec(ctx, `

@@ -13,16 +13,18 @@ import (
 	"net/url"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
 // Error types for Daytona API.
 var (
-	ErrRateLimited     = errors.New("rate limited by Daytona API")
-	ErrSandboxNotFound = errors.New("sandbox not found")
-	ErrSandboxStopped  = errors.New("sandbox is stopped")
-	ErrQuotaExceeded   = errors.New("Daytona quota exceeded")
+	ErrRateLimited           = errors.New("rate limited by Daytona API")
+	ErrSandboxNotFound       = errors.New("sandbox not found")
+	ErrSandboxStopped        = errors.New("sandbox is stopped")
+	ErrQuotaExceeded         = errors.New("Daytona quota exceeded")
+	ErrStateChangeInProgress = errors.New("state change in progress")
 )
 
 // SandboxState represents the state of a Daytona sandbox.
@@ -291,7 +293,9 @@ func (c *Client) Delete(ctx context.Context, id string) error {
 // DeleteAndVerify deletes a sandbox and verifies it's actually gone.
 func (c *Client) DeleteAndVerify(ctx context.Context, id string) error {
 	if err := c.Delete(ctx, id); err != nil {
-		return fmt.Errorf("deleting sandbox: %w", err)
+		if !errors.Is(err, ErrStateChangeInProgress) {
+			return fmt.Errorf("deleting sandbox: %w", err)
+		}
 	}
 
 	deadline := time.Now().Add(10 * time.Second)
@@ -340,7 +344,9 @@ func (c *Client) Start(ctx context.Context, id string) error {
 // StartAndWait starts a sandbox and waits for it to be running.
 func (c *Client) StartAndWait(ctx context.Context, id string, timeout time.Duration) error {
 	if err := c.Start(ctx, id); err != nil {
-		return err
+		if !errors.Is(err, ErrStateChangeInProgress) {
+			return err
+		}
 	}
 
 	deadline := time.Now().Add(timeout)
@@ -650,9 +656,16 @@ func (c *Client) parseError(resp *http.Response) error {
 	body, _ := io.ReadAll(resp.Body)
 	var errResp ErrorResponse
 	if json.Unmarshal(body, &errResp) == nil && errResp.Message != "" {
+		if strings.Contains(strings.ToLower(errResp.Message), "state change in progress") {
+			return ErrStateChangeInProgress
+		}
 		return fmt.Errorf("daytona API error (%d): %s", resp.StatusCode, errResp.Message)
 	}
-	return fmt.Errorf("daytona API error (%d): %s", resp.StatusCode, string(body))
+	bodyStr := string(body)
+	if strings.Contains(strings.ToLower(bodyStr), "state change in progress") {
+		return ErrStateChangeInProgress
+	}
+	return fmt.Errorf("daytona API error (%d): %s", resp.StatusCode, bodyStr)
 }
 
 func parseRetryAfter(header string) time.Duration {

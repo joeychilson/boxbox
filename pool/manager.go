@@ -252,46 +252,60 @@ func (m *Manager) reconcileWithDaytona(ctx context.Context) {
 		return
 	}
 
-	var leaked []string
+	var untracked []daytona.Sandbox
 	for _, s := range daytonaSandboxes {
 		if !knownIDs[s.ID] {
-			leaked = append(leaked, s.ID)
+			untracked = append(untracked, s)
 		}
 	}
 
-	if len(leaked) == 0 {
-		m.logger.Info("no leaked sandboxes found", "daytona_count", len(daytonaSandboxes), "known_count", len(knownIDs))
+	if len(untracked) == 0 {
+		m.logger.Info("no untracked sandboxes found", "daytona_count", len(daytonaSandboxes), "known_count", len(knownIDs))
 		return
 	}
 
-	m.logger.Warn("found leaked sandboxes in Daytona", "count", len(leaked))
+	m.logger.Info("found untracked sandboxes in Daytona", "count", len(untracked))
 
 	sem := make(chan struct{}, 5)
 	var wg sync.WaitGroup
+	var imported, deleted int64
 
-	for _, id := range leaked {
+	for _, s := range untracked {
 		wg.Add(1)
-		go func(daytonaID string) {
+		go func(sandbox daytona.Sandbox) {
 			defer wg.Done()
 			sem <- struct{}{}
 			defer func() { <-sem }()
 
-			m.logger.Info("deleting leaked sandbox", "daytona_id", daytonaID)
-
-			deleteCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+			opCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 
-			if err := m.daytona.Delete(deleteCtx, daytonaID); err != nil && !errors.Is(err, daytona.ErrSandboxNotFound) {
-				m.logger.Warn("failed to delete leaked sandbox", "error", err, "daytona_id", daytonaID)
-				return
-			}
+			if sandbox.IsHealthy() {
+				m.logger.Info("importing healthy sandbox", "daytona_id", sandbox.ID, "state", sandbox.State)
 
-			m.deletedCount.Add(1)
-		}(id)
+				if _, err := m.db.ImportSandbox(opCtx, sandbox.ID); err != nil {
+					m.logger.Error("failed to import sandbox", "error", err, "daytona_id", sandbox.ID)
+					return
+				}
+
+				atomic.AddInt64(&imported, 1)
+				m.createdCount.Add(1)
+			} else {
+				m.logger.Info("deleting unhealthy untracked sandbox", "daytona_id", sandbox.ID, "state", sandbox.State)
+
+				if err := m.daytona.Delete(opCtx, sandbox.ID); err != nil && !errors.Is(err, daytona.ErrSandboxNotFound) {
+					m.logger.Warn("failed to delete unhealthy sandbox", "error", err, "daytona_id", sandbox.ID)
+					return
+				}
+
+				atomic.AddInt64(&deleted, 1)
+				m.deletedCount.Add(1)
+			}
+		}(s)
 	}
 
 	wg.Wait()
-	m.logger.Info("reconciliation complete", "deleted", len(leaked))
+	m.logger.Info("reconciliation complete", "imported", imported, "deleted", deleted)
 }
 
 // runScaler maintains the warm pool size.
