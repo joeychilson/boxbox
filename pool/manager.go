@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/joeychilson/boxbox/config"
 	"github.com/joeychilson/boxbox/daytona"
 	"github.com/joeychilson/boxbox/db"
+	"github.com/joeychilson/boxbox/image"
 )
 
 // BoxboxLabel is the label used to identify sandboxes created by boxbox.
@@ -373,13 +373,9 @@ func (m *Manager) createSandbox(ctx context.Context) {
 	if m.cfg.DaytonaImage != "" {
 		req.Image = m.cfg.DaytonaImage
 		m.logger.Debug("using configured image", "image", m.cfg.DaytonaImage)
-	} else if dockerfile, err := os.ReadFile("image/Dockerfile"); err == nil {
-		req.BuildInfo = &daytona.BuildInfo{DockerfileContent: string(dockerfile)}
-		m.logger.Debug("using Dockerfile for dynamic build")
 	} else {
-		m.logger.Error("no image configured and no Dockerfile found")
-		m.failedCount.Add(1)
-		return
+		req.BuildInfo = &daytona.BuildInfo{DockerfileContent: image.DockerfileContent}
+		m.logger.Debug("using embedded Dockerfile for dynamic build")
 	}
 
 	sandbox, err := m.daytona.Create(ctx, req)
