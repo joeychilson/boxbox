@@ -51,6 +51,16 @@ func (s *Sandbox) IsHealthy() bool {
 	return s.State == SandboxStateStarted || s.State == SandboxStateRunning
 }
 
+// IsUsable returns true if the sandbox can be used (running or can be woken up).
+func (s *Sandbox) IsUsable() bool {
+	return s.State == SandboxStateStarted || s.State == SandboxStateRunning || s.State == SandboxStateStopped
+}
+
+// IsStopped returns true if the sandbox is stopped (sleeping).
+func (s *Sandbox) IsStopped() bool {
+	return s.State == SandboxStateStopped
+}
+
 // BuildInfo contains dockerfile content for dynamic image builds.
 type BuildInfo struct {
 	DockerfileContent string `json:"dockerfileContent,omitempty"`
@@ -266,6 +276,27 @@ func (c *Client) IsHealthy(ctx context.Context, id string) (bool, error) {
 		return false, err
 	}
 	return sandbox.IsHealthy(), nil
+}
+
+// IsUsable checks if a sandbox is usable (running or can be woken up).
+func (c *Client) IsUsable(ctx context.Context, id string) (bool, error) {
+	sandbox, err := c.Get(ctx, id)
+	if err != nil {
+		if errors.Is(err, ErrSandboxNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return sandbox.IsUsable(), nil
+}
+
+// IsStopped checks if a sandbox is stopped (sleeping).
+func (c *Client) IsStopped(ctx context.Context, id string) (bool, error) {
+	sandbox, err := c.Get(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	return sandbox.IsStopped(), nil
 }
 
 // Delete deletes a sandbox with retry logic.

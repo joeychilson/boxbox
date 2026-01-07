@@ -107,26 +107,50 @@ func (m *Manager) ClaimSandbox(ctx context.Context, executionID uuid.UUID) (*db.
 			return nil, err
 		}
 
-		healthy, err := m.daytona.IsHealthy(ctx, sandbox.DaytonaID)
+		daytonaSandbox, err := m.daytona.Get(ctx, sandbox.DaytonaID)
 		if err != nil {
-			m.logger.Warn("health check failed, deleting sandbox",
+			m.logger.Warn("failed to get sandbox state, deleting",
 				"sandbox_id", sandbox.ID,
 				"daytona_id", sandbox.DaytonaID,
 				"error", err,
 			)
 			m.unhealthyCount.Add(1)
-			m.DeleteSandbox(ctx, sandbox, "health check failed")
+			m.DeleteSandbox(ctx, sandbox, "failed to get state")
 			continue
 		}
 
-		if !healthy {
-			m.logger.Warn("sandbox unhealthy, deleting",
+		if !daytonaSandbox.IsUsable() {
+			m.logger.Warn("sandbox not usable, deleting",
+				"sandbox_id", sandbox.ID,
+				"daytona_id", sandbox.DaytonaID,
+				"state", daytonaSandbox.State,
+			)
+			m.unhealthyCount.Add(1)
+			m.DeleteSandbox(ctx, sandbox, "not usable")
+			continue
+		}
+
+		if daytonaSandbox.IsStopped() {
+			m.logger.Info("waking up stopped sandbox",
 				"sandbox_id", sandbox.ID,
 				"daytona_id", sandbox.DaytonaID,
 			)
-			m.unhealthyCount.Add(1)
-			m.DeleteSandbox(ctx, sandbox, "unhealthy")
-			continue
+
+			if err := m.daytona.StartAndWait(ctx, sandbox.DaytonaID, 2*time.Minute); err != nil {
+				m.logger.Warn("failed to wake sandbox, deleting",
+					"sandbox_id", sandbox.ID,
+					"daytona_id", sandbox.DaytonaID,
+					"error", err,
+				)
+				m.unhealthyCount.Add(1)
+				m.DeleteSandbox(ctx, sandbox, "failed to wake")
+				continue
+			}
+
+			m.logger.Info("sandbox woken up successfully",
+				"sandbox_id", sandbox.ID,
+				"daytona_id", sandbox.DaytonaID,
+			)
 		}
 
 		m.healthyCount.Add(1)
@@ -280,8 +304,8 @@ func (m *Manager) reconcileWithDaytona(ctx context.Context) {
 			opCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 			defer cancel()
 
-			if sandbox.IsHealthy() {
-				m.logger.Info("importing healthy sandbox", "daytona_id", sandbox.ID, "state", sandbox.State)
+			if sandbox.IsUsable() {
+				m.logger.Info("importing usable sandbox", "daytona_id", sandbox.ID, "state", sandbox.State)
 
 				if _, err := m.db.ImportSandbox(opCtx, sandbox.ID); err != nil {
 					m.logger.Error("failed to import sandbox", "error", err, "daytona_id", sandbox.ID)
@@ -291,10 +315,10 @@ func (m *Manager) reconcileWithDaytona(ctx context.Context) {
 				atomic.AddInt64(&imported, 1)
 				m.createdCount.Add(1)
 			} else {
-				m.logger.Info("deleting unhealthy untracked sandbox", "daytona_id", sandbox.ID, "state", sandbox.State)
+				m.logger.Info("deleting unusable untracked sandbox", "daytona_id", sandbox.ID, "state", sandbox.State)
 
 				if err := m.daytona.Delete(opCtx, sandbox.ID); err != nil && !errors.Is(err, daytona.ErrSandboxNotFound) {
-					m.logger.Warn("failed to delete unhealthy sandbox", "error", err, "daytona_id", sandbox.ID)
+					m.logger.Warn("failed to delete unusable sandbox", "error", err, "daytona_id", sandbox.ID)
 					return
 				}
 
@@ -494,7 +518,7 @@ func (m *Manager) runHealthChecker(ctx context.Context) {
 	}
 }
 
-// checkHealth verifies available sandboxes are healthy.
+// checkHealth verifies available sandboxes are usable (running or stopped/sleeping).
 func (m *Manager) checkHealth(ctx context.Context) {
 	sandboxes, err := m.db.GetAvailableSandboxes(ctx, 5)
 	if err != nil {
@@ -503,7 +527,7 @@ func (m *Manager) checkHealth(ctx context.Context) {
 	}
 
 	for _, s := range sandboxes {
-		healthy, err := m.daytona.IsHealthy(ctx, s.DaytonaID)
+		usable, err := m.daytona.IsUsable(ctx, s.DaytonaID)
 		if err != nil {
 			if errors.Is(err, daytona.ErrSandboxNotFound) {
 				m.logger.Warn("sandbox not found in Daytona during health check",
@@ -516,13 +540,13 @@ func (m *Manager) checkHealth(ctx context.Context) {
 			continue
 		}
 
-		if !healthy {
-			m.logger.Warn("sandbox unhealthy during health check",
+		if !usable {
+			m.logger.Warn("sandbox not usable during health check",
 				"sandbox_id", s.ID,
 				"daytona_id", s.DaytonaID,
 			)
 			m.unhealthyCount.Add(1)
-			m.DeleteSandbox(ctx, &s, "unhealthy during health check")
+			m.DeleteSandbox(ctx, &s, "not usable during health check")
 		}
 	}
 }
