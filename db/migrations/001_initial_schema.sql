@@ -1,5 +1,8 @@
+-- Create boxbox schema
+CREATE SCHEMA IF NOT EXISTS boxbox;
+
 -- Pool of sandboxes
-CREATE TABLE IF NOT EXISTS sandbox_pool (
+CREATE TABLE IF NOT EXISTS boxbox.sandbox_pool (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     daytona_id VARCHAR(255) UNIQUE NOT NULL,
     state VARCHAR(50) NOT NULL DEFAULT 'creating',
@@ -12,11 +15,11 @@ CREATE TABLE IF NOT EXISTS sandbox_pool (
 );
 
 -- Execution requests
-CREATE TABLE IF NOT EXISTS executions (
+CREATE TABLE IF NOT EXISTS boxbox.executions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id VARCHAR(255) NOT NULL,
     chat_id VARCHAR(255) NOT NULL,
-    sandbox_id UUID REFERENCES sandbox_pool(id),
+    sandbox_id UUID REFERENCES boxbox.sandbox_pool(id),
     language VARCHAR(50) NOT NULL,
     path VARCHAR(255) NOT NULL DEFAULT 'main.py',
     code TEXT NOT NULL,
@@ -34,7 +37,7 @@ CREATE TABLE IF NOT EXISTS executions (
 );
 
 -- Indexes
-CREATE INDEX IF NOT EXISTS idx_sandbox_state ON sandbox_pool(state);
-CREATE INDEX IF NOT EXISTS idx_sandbox_available ON sandbox_pool(state, created_at) WHERE state = 'available';
-CREATE INDEX IF NOT EXISTS idx_executions_status ON executions(status);
-CREATE INDEX IF NOT EXISTS idx_executions_user_chat ON executions(user_id, chat_id);
+CREATE INDEX IF NOT EXISTS idx_sandbox_state ON boxbox.sandbox_pool(state);
+CREATE INDEX IF NOT EXISTS idx_sandbox_available ON boxbox.sandbox_pool(state, created_at) WHERE state = 'available';
+CREATE INDEX IF NOT EXISTS idx_executions_status ON boxbox.executions(status);
+CREATE INDEX IF NOT EXISTS idx_executions_user_chat ON boxbox.executions(user_id, chat_id);

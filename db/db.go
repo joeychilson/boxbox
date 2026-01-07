@@ -18,7 +18,14 @@ type DB struct {
 
 // New creates a new database connection pool.
 func New(ctx context.Context, databaseURL string) (*DB, error) {
-	pool, err := pgxpool.New(ctx, databaseURL)
+	config, err := pgxpool.ParseConfig(databaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing database URL: %w", err)
+	}
+
+	config.ConnConfig.RuntimeParams["search_path"] = "boxbox,public"
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("connecting to database: %w", err)
 	}
