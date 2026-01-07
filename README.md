@@ -1,6 +1,6 @@
 # boxbox
 
-A code execution platform that provides on-demand sandboxed execution for Python and Bash using [Daytona](https://daytona.io) built specifically for chat applications.
+A code/bash execution API built for chat applications using [Daytona](https://daytona.io).
 
 ## Requirements
 
