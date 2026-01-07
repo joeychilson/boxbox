@@ -29,9 +29,10 @@ type Config struct {
 	SyncConcurrency        int
 	QueueMaxConcurrent     int
 	QueueWaitTimeout       time.Duration
-	SandboxCPU             int
-	SandboxMemory          int
-	SandboxDisk            int
+	SandboxCPU              int
+	SandboxMemory           int
+	SandboxDisk             int
+	SandboxAutoStopInterval int
 }
 
 // Load loads configuration from environment variables.
@@ -57,9 +58,10 @@ func Load() (*Config, error) {
 		SyncConcurrency:        getEnvInt("SYNC_CONCURRENCY", 5),
 		QueueMaxConcurrent:     getEnvInt("QUEUE_MAX_CONCURRENT", 10),
 		QueueWaitTimeout:       getEnvDuration("QUEUE_WAIT_TIMEOUT", 30*time.Second),
-		SandboxCPU:             getEnvInt("SANDBOX_CPU", 1),
-		SandboxMemory:          getEnvInt("SANDBOX_MEMORY", 1),
-		SandboxDisk:            getEnvInt("SANDBOX_DISK", 1),
+		SandboxCPU:              getEnvInt("SANDBOX_CPU", 1),
+		SandboxMemory:           getEnvInt("SANDBOX_MEMORY", 1),
+		SandboxDisk:             getEnvInt("SANDBOX_DISK", 1),
+		SandboxAutoStopInterval: getEnvInt("SANDBOX_AUTO_STOP_INTERVAL", 1),
 	}
 
 	if cfg.DatabaseURL == "" {

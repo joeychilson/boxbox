@@ -58,18 +58,17 @@ type BuildInfo struct {
 
 // CreateSandboxRequest is the request to create a sandbox.
 type CreateSandboxRequest struct {
-	Image     string            `json:"image,omitempty"`
-	BuildInfo *BuildInfo        `json:"buildInfo,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
-	Env       map[string]string `json:"env,omitempty"`
-	Public    bool              `json:"public,omitempty"`
-	CPU       int               `json:"cpu,omitempty"`
-	Memory    int               `json:"memory,omitempty"`
-	Disk      int               `json:"disk,omitempty"`
-	GPU       string            `json:"gpu,omitempty"`
-	AutoStop  int               `json:"autoStop,omitempty"`
-	Timeout   int               `json:"timeout,omitempty"`
-	User      string            `json:"user,omitempty"`
+	Image            string            `json:"image,omitempty"`
+	BuildInfo        *BuildInfo        `json:"buildInfo,omitempty"`
+	Labels           map[string]string `json:"labels,omitempty"`
+	Env              map[string]string `json:"env,omitempty"`
+	Public           bool              `json:"public,omitempty"`
+	CPU              int               `json:"cpu,omitempty"`
+	Memory           int               `json:"memory,omitempty"`
+	Disk             int               `json:"disk,omitempty"`
+	GPU              string            `json:"gpu,omitempty"`
+	AutoStopInterval *int32            `json:"autoStopInterval,omitempty"`
+	User             string            `json:"user,omitempty"`
 }
 
 // ProcessExecuteRequest is the request to execute a command.

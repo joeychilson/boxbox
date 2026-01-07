@@ -375,13 +375,13 @@ func (m *Manager) createSandbox(ctx context.Context) {
 		return
 	}
 
+	autoStopInterval := int32(m.cfg.SandboxAutoStopInterval)
 	req := &daytona.CreateSandboxRequest{
-		Labels:   map[string]string{BoxboxLabel: BoxboxLabelValue},
-		CPU:      m.cfg.SandboxCPU,
-		Memory:   m.cfg.SandboxMemory,
-		Disk:     m.cfg.SandboxDisk,
-		AutoStop: 60,
-		Timeout:  120,
+		Labels:           map[string]string{BoxboxLabel: BoxboxLabelValue},
+		CPU:              m.cfg.SandboxCPU,
+		Memory:           m.cfg.SandboxMemory,
+		Disk:             m.cfg.SandboxDisk,
+		AutoStopInterval: &autoStopInterval,
 	}
 
 	if m.cfg.DaytonaImage != "" {
